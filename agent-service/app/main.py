@@ -8,6 +8,7 @@ import uuid
 import asyncio
 from starlette.middleware.cors import CORSMiddleware
 
+from app.chat_thread.router import router as chat_thread_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.database import init_db,close_db
@@ -63,6 +64,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 挂载路由
+app.include_router(chat_thread_router,prefix="/api/v1",tags=["会话管理相关接口"])
 
 @app.get("/")
 async def healthy():
