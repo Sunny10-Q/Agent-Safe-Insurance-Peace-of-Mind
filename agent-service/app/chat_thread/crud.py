@@ -1,4 +1,4 @@
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat_thread.exceptions import ChatThreadNotFound
@@ -41,7 +41,17 @@ class ChatThreadService:
             # 判断是否更新成功
             thread = result.scalar_one_or_none()
             if thread is None:
-                raise ChatThreadNotFound
+                raise ChatThreadNotFound(f"更新失败，thread_id错误:{thread_id}")
             # 返回结果
             return thread
+
+    # 删除会话
+    async def delete(self, thread_id, user_id):
+        async with self._session.begin():
+            # 先查再删
+            thread = await self._session.get(ChatThreadTable,thread_id)
+            if not thread and thread.user_id!=user_id:
+                raise ChatThreadNotFound(f"删除会话失败，thread_id:{thread_id}")
+            await self._session.delete(thread)
+
 
