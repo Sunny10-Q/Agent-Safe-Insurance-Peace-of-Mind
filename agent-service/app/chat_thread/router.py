@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
+from uuid import UUID
 
 from app.chat_thread.crud import ChatThreadService
+from .exceptions import ChatThreadNotFound
 from .schemas import ChatThreadCreate, ChatThreadResponse
 from ..core.database import get_db
 from app.core.logging import get_logger
@@ -38,3 +40,25 @@ async def get_chat_list(chat_thread_service:ChatThreadService=Depends(get_chat_t
     result= await chat_thread_service.get_chat_list(user_id)
     logger.info(f"查询用户{user_id}的会话列表，共{len(result)}条")
     return result # type: ignore
+
+
+# 重命名会话
+@router.patch("/{thread_id}", response_model=ChatThreadResponse)
+async def rename_chat_thread(
+    thread_id: UUID,
+    body: ChatThreadCreate,
+    chat_thread_service: ChatThreadService = Depends(get_chat_thread_service),
+) -> ChatThreadResponse:
+    """重命名会话"""
+    try:
+        thread = await chat_thread_service.rename(thread_id, user_id, body.title)
+        logger.info(f"会话重命名成功id:{thread_id}")
+    except ChatThreadNotFound as exc:
+        raise _not_found() from exc
+    logger.info("chat_thread_renamed", thread_id=str(thread_id), user_id=user_id)
+    return thread
+
+# 定义通用的404异常方法
+def _not_found() -> HTTPException:
+    return HTTPException(status_code=404, detail="chat chat_thread not found")
+

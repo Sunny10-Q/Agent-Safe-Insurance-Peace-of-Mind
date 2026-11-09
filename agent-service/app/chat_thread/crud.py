@@ -1,5 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.chat_thread.exceptions import ChatThreadNotFound
 from app.chat_thread.models import ChatThreadTable
 
 
@@ -22,8 +24,24 @@ class ChatThreadService:
     async def get_chat_list(self,user_id:int)->list[ChatThreadTable]:
 
         result = await self._session.execute(
-            select(ChatThreadTable).where(ChatThreadTable.user_id == user_id) # type: ignore
+            select(ChatThreadTable).where(ChatThreadTable.user_id == user_id).order_by(desc(ChatThreadTable.updated_at), desc(ChatThreadTable.created_at)) # type: ignore
         )
 
         return result.scalars().all() # type: ignore
+
+    # 会话重命名
+    async def rename(self, thread_id, user_id, title)->ChatThreadTable:
+        async with self._session.begin():
+            result = await self._session.execute(
+                update(ChatThreadTable)
+                .values(title=title)
+                .where(ChatThreadTable.user_id == user_id, ChatThreadTable.id == thread_id)
+                .returning(ChatThreadTable)
+            )
+            # 判断是否更新成功
+            thread = result.scalar_one_or_none()
+            if thread is None:
+                raise ChatThreadNotFound
+            # 返回结果
+            return thread
 
