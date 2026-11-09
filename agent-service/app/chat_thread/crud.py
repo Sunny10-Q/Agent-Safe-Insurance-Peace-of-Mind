@@ -1,7 +1,6 @@
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.chat_thread.models import ChatThreadTable
-from app.chat_thread.schemas import ChatThreadResponse
 
 
 
@@ -18,3 +17,13 @@ class ChatThreadService:
             # 操作数据库新增
             self._session.add(chat_thread)
             return chat_thread
+
+    # 查询所有会话
+    async def get_chat_list(self,user_id:int)->list[ChatThreadTable]:
+
+        result = await self._session.execute(
+            select(ChatThreadTable).where(ChatThreadTable.user_id == user_id) # type: ignore
+        )
+
+        return result.scalars().all() # type: ignore
+
