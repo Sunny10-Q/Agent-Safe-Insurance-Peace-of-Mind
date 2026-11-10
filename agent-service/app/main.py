@@ -9,10 +9,12 @@ import asyncio
 from starlette.middleware.cors import CORSMiddleware
 
 from app.chat_thread.router import router as chat_thread_router
+from app.agent.router import router as agent_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.database import init_db,close_db
-
+from app.agent.checkpointer import init_checkpointer,close_checkpointer
+from app.agent.graph import create_agent
 
 # 初始化日志配置
 configure_logging(level=settings.log_level, log_format=settings.log_format)
@@ -25,14 +27,21 @@ async def lifespan(app: FastAPI):
         logger.info("agent_service_starting", app_version=settings.app_version)
         # 初始化数据库
         await init_db()
+        # 初始化checkpointer
+        checkpointer = await init_checkpointer()
+        # 创建全局Agent
+        app.state.agent = await create_agent(checkpointer)
         yield
     finally:
         logger.info("agent_service_stopping")
         # 项目停止时关闭数据库
         await close_db()
+        # 关闭checkpointer
+        await close_checkpointer()
 
 # 初始化FastAPI
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+
 
 # 日志输出中间件
 @app.middleware("http")
@@ -68,6 +77,8 @@ app.add_middleware(
 
 # 挂载路由
 app.include_router(chat_thread_router,prefix="/api/v1",tags=["会话管理相关接口"])
+
+app.include_router(agent_router,prefix="/api/v1",tags=["Agent对话相关接口"])
 
 @app.get("/")
 async def healthy():

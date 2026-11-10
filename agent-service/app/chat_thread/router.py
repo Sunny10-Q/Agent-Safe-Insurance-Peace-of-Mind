@@ -65,8 +65,12 @@ async def delete_chat_thread(
         thread_id: UUID,
         chat_thread_service: ChatThreadService = Depends(get_chat_thread_service)
 ):
-    await chat_thread_service.delete(thread_id,user_id)
-    logger.info(f"删除会话成功，会话id:{thread_id}")
+    try:
+        await chat_thread_service.delete(thread_id, user_id)
+        # TODO 删除会话历史消息
+        logger.info(f"删除会话成功，会话id:{thread_id}")
+    except ChatThreadNotFound as exc:
+        raise _not_found() from exc
 
 
 # 定义通用的404异常方法
