@@ -20,6 +20,7 @@ def get_agent(request: Request):
     # 从FastApi中获取全局Agent
     return request.app.state.agent
 
+# 对话接口
 @router.post("/chat",response_class=EventSourceResponse)
 async def chat(
         request: ChatRequest,

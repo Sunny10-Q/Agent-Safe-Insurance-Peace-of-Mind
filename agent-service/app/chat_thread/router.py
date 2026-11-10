@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException,Request
+from langgraph.graph.state import CompiledStateGraph
 from starlette import status
 from uuid import UUID
 
 from app.chat_thread.crud import ChatThreadService
 from .exceptions import ChatThreadNotFound
-from .schemas import ChatThreadCreate, ChatThreadResponse
+from .schemas import ChatThreadCreate, ChatThreadResponse, ChatHistoryResponse
 from ..core.database import get_db
 from app.core.logging import get_logger
+from app.agent.service import get_history_messages,delete_history_message
 
 logger = get_logger(__name__)
 
@@ -16,6 +18,10 @@ router=APIRouter(prefix="/chat-threads")
 # 注入session获取crud实例
 async def get_chat_thread_service(session=Depends(get_db)):
     return ChatThreadService(session)
+
+# 注入agent
+def get_agent(request: Request) -> CompiledStateGraph:
+    return request.app.state.agent
 
 @router.get("/hi")
 async def say_hi():
@@ -71,6 +77,40 @@ async def delete_chat_thread(
         logger.info(f"删除会话成功，会话id:{thread_id}")
     except ChatThreadNotFound as exc:
         raise _not_found() from exc
+
+
+# 查询会话
+@router.get("/{thread_id}/messages")
+async def get_message_history(
+        thread_id: UUID,
+        agent:CompiledStateGraph=Depends(get_agent),
+        chat_thread_service: ChatThreadService = Depends(get_chat_thread_service),
+)->ChatHistoryResponse:
+    # 校验，当前会话是否属于当前用户
+    await chat_thread_service.require_owner(thread_id,user_id)
+    # 查询会话历史
+    messages = await get_history_messages(agent,thread_id)
+    # 封装结果
+    return ChatHistoryResponse(thread_id=thread_id ,messages=messages)
+
+
+
+@router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_thread(
+    thread_id: UUID,
+    agent: CompiledStateGraph=Depends(get_agent),
+    chat_thread_service: ChatThreadService = Depends(get_chat_thread_service)
+):
+    try:
+        # 删除会话
+        await chat_thread_service.delete(thread_id, user_id)
+        # 删除会话历史消息
+        await delete_history_message(agent, thread_id)
+
+        logger.info("删除会话成功~", thread_id=str(thread_id), user_id=user_id)
+
+    except ChatThreadNotFound as ex:
+        raise _not_found() from ex
 
 
 # 定义通用的404异常方法
